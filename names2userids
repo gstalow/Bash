@@ -1,0 +1,137 @@
+#!/bin/bash
+# Script to create unique userids from a list of user names
+# CS 370, Fall 2014
+# Grayce Stalowski
+# to run use
+# ./names2userids p3short.txt
+
+#allow input file to be command line argument and save as variable inputfile
+inputfile=$1
+rm ids.2nd 2> /dev/null #command to remove the ids.2nd so that it starts with a blank file
+rm ids.final 2> /dev/null #command to remove the ids.2nd so that it starts with a blank file
+
+# 0. Remove any temporary files from previous runs of the script.
+#    This is essential during script testing.
+
+# 1. Create firstn from $inputfile
+echo "1. Extracting first letter of first name > firstn"
+echo ""
+
+# Generate firstn
+cut -d' ' -f2 $inputfile | # Use 1 space as delimiter, extract first name. f2 means field 2
+cut -c1 |              # Extract 1st character of first name.
+tr A-Z a-z > firstn    # Convert to lower case and save. tr is to translate or delete characters
+
+# 2. Create lastname from $inputfile with all special characters removed
+
+echo "2. Removing special characters and extracting up to 7 letters of lastname from $input > lastn"
+echo ""
+
+# Generate lastname
+cut -d, -f1 $inputfile |   # Use , as delimiter, extract last name.
+cut -c1-7 |            # Cut up to 7 characters of last name.
+#remove any non letter characters so remove ' and " replace with nothing just cut them
+tr --delete '-'|
+tr --delete "'" |
+tr --delete " " |
+tr A-Z a-z > lastn  # Convert to lower case and save.
+
+# 3. Create first draft userids file from firstn and lastname > ids.1st'
+echo "3. Creating first draft userids file > ids.1st"
+echo ""
+
+paste firstn lastn | # Paste together with default delimiter (\t)
+sed "s/\t//" > ids.1st      # Delete tab (\t) and save.
+
+# 4. Create list of the duplicated ids in ids.1st > duplids'.
+#idea of how to remove duplicates
+echo "4. Creating list of duplicated ids in ids.1st > duplids"
+echo ""
+
+awk -F, 'array[$1]++' ids.1st > duplids #compares the values in ids.1st to values in duplids using an array and the -F, comma seperator and puts duplicated ones into duplids
+# 5. Append userids from ids.1st to ids.2nd.
+#    For each userid in ids.1st, grep for the userid in duplids from Step 4.
+
+echo "5. Finding and appending numbers to duplicates in ids.1st > ids.2nd"
+echo ""
+
+declare -i count=1 #used to keep tract of iterations for progress bar
+
+while read userid; do
+#progress bar here
+#count every iteration through the while loop and every 200th one echo a .
+ count=$count+1
+ declare -i two=$count%200
+ if [ $two -eq 0 ]; then
+    echo -ne "."
+ fi
+ 
+   grep -q -w $userid duplids #grep for the userid in duplids to see if it is a duplicate id
+   if [ $? -eq 0 ]; then #duplicate ids here so cut 
+	declare -i n=1 #set n at 1 as calue for id number
+    userid_plus_number=$(echo $userid | cut -c1-7)$n #cut 7 characters, add 1 to the end of it
+
+	#echo $userid_plus_number
+	
+	#grep for id in ids.2nd
+	#if found, increment the id number
+	# loop until the grep fails
+	#once it is not in ids.2nd, add it
+	
+	n=0; #start n at 0 so that the n+1 makes it 1 in first command in while loop
+
+	grep -q -w $userid_plus_number ids.2nd #grep to see if in ids.2nd , make sure grep is last command before the while loop
+	while [ $? -eq 0 ]; do #while grep is successful, it is in ids.2nd
+		#echo match
+		declare -i n=n+1; #increment id number
+		declare -i ten=10 #for comparison
+		
+		if [ "$n" -ge "$ten" ]; then #if n the id number is 2 digits
+		  userid_plus_number=$(echo $userid | cut -c1-6)$n #cut 6 characters, add 2 digit number
+		else #if the id number is 1 digit
+		  userid_plus_number=$(echo $userid | cut -c1-7)$n #cut 7 characters, add 1 digit number
+		fi
+		#echo $userid_plus_number #print out the new id
+		grep -q -w $userid_plus_number ids.2nd #grep again for while loop to check if the new id is in ids.2nd
+	done
+
+	#once a unique id is verified, add it to ids.2nd
+	echo $userid_plus_number >> ids.2nd
+   else #not a duplicate no number needed
+	echo $userid >> ids.2nd
+   fi
+done < ids.1st #end while loop for putting ids into ids.2nd
+#echo new line to end the progress bar
+echo -en "\n"
+# 6. Double check ids.2nd for any userid duplications.
+#    The same uniq option used to create duplids (step 4) should work.
+echo "6. Double checking ids.2nd for any userid duplications"
+echo ""
+awk -F, 'array[$1]++' ids.2nd > duplids2 #if ids.2nd has duplicates, put them into ids.2nd
+
+if [ -s duplids2 ] #if duplids2 is not empty  
+then  
+    echo "There are still duplicate ids."
+else  #if it is empty
+    echo "There are no duplicate ids."
+fi
+
+# 7. Paste ids.2nd to $inputfile > ids.final
+#paste p3short.txt ids.2nd > ids.final
+echo "7. No userid duplication found."
+echo "   Pasting ids.2nd to original input file > ids.final"
+echo ""
+paste -d':' $inputfile ids.2nd > ids.final #paste and add to ids.final
+
+echo "Check file ids.final"
+
+#8. Remove temporary files
+echo "8. Removing Temporary files"
+
+#remove all the temp files that were created
+rm ids.2nd 2> /dev/null 
+rm ids.1st 2> /dev/null
+rm firstn 2> /dev/null 
+rm lastn 2> /dev/null
+rm duplids 2> /dev/null
+rm duplids2 2> /dev/null
